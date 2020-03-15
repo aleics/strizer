@@ -33,12 +33,32 @@ impl Token {
     }
   }
 
+  /// Returns `true` if the `Token` is [`TokenKind::Character`]
+  ///
+  /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
+  pub fn is_character(&self) -> bool {
+    match self.kind {
+      TokenKind::Character(_) => true,
+      _ => false,
+    }
+  }
+
   /// Creates a word token with a given start position (in bytes) and an index.
   pub fn word(term: &str, start: usize, index: usize) -> Token {
     Token {
       kind: TokenKind::Word(term.to_owned()),
       start,
       index,
+    }
+  }
+
+  /// Returns `true` if the `Token` is [`TokenKind::Word`]
+  ///
+  /// [`TokenKind::Word`]: enum.TokenKind.html#variant.Word
+  pub fn is_word(&self) -> bool {
+    match self.kind {
+      TokenKind::Word(_) => true,
+      _ => false,
     }
   }
 }
@@ -108,10 +128,7 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   /// tokenizer.ordinary_char('a');
   ///
   /// let a_count = tokenizer
-  ///   .filter(|token| match &token.kind {
-  ///     TokenKind::Character(_) => true,
-  ///     TokenKind::Word(_) => false
-  ///   })
+  ///   .filter(|token| token.is_character())
   ///   .count();
   ///
   /// assert_eq!(a_count, 5);
@@ -215,10 +232,7 @@ impl<'a> StringTokenizer<'a> {
   /// tokenizer.ordinary_char('a');
   ///
   /// let a_count = tokenizer
-  ///   .filter(|token| match &token.kind {
-  ///     TokenKind::Character(_) => true,
-  ///     TokenKind::Word(_) => false
-  ///   })
+  ///   .filter(|token| token.is_character())
   ///   .count();
   ///
   /// assert_eq!(a_count, 5);
