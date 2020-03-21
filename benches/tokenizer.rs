@@ -2,8 +2,9 @@
 
 extern crate test;
 
-use strizer::{StringTokenizer, Token};
 use test::Bencher;
+
+use strizer::{StringTokenizer, Token};
 
 #[bench]
 fn bench_tokenize_words(b: &mut Bencher) {
