@@ -315,6 +315,45 @@ fn extract_word<'a>(input: &'a str, delimiters: &'a [char]) -> &'a str {
 }
 
 #[cfg(test)]
+mod token_tests {
+  use crate::{Token, TokenKind};
+
+  #[test]
+  fn is_character() {
+    let char_token = Token {
+      kind: TokenKind::Character('a'),
+      start: 0,
+      index: 0,
+    };
+    assert_eq!(char_token.is_character(), true);
+
+    let word_token = Token {
+      kind: TokenKind::Word("a".to_string()),
+      start: 0,
+      index: 0,
+    };
+    assert_eq!(word_token.is_character(), false);
+  }
+
+  #[test]
+  fn is_word() {
+    let word_token = Token {
+      kind: TokenKind::Word("a".to_string()),
+      start: 0,
+      index: 0,
+    };
+    assert_eq!(word_token.is_word(), true);
+
+    let char_token = Token {
+      kind: TokenKind::Character('a'),
+      start: 0,
+      index: 0,
+    };
+    assert_eq!(char_token.is_word(), false);
+  }
+}
+
+#[cfg(test)]
 mod string_tokenizer_tests {
   use crate::{StringTokenizer, Token};
 
