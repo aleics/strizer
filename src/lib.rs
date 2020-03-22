@@ -43,6 +43,16 @@ impl Token {
     }
   }
 
+  /// Returns `true` if the `Token` is [`TokenKind::Character`] and equal to the `input` character.
+  ///
+  /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
+  pub fn is_character_equal(&self, input: char) -> bool {
+    match self.kind {
+      TokenKind::Character(character) => character == input,
+      _ => false,
+    }
+  }
+
   /// Creates a word token with a given start position (in bytes) and an index.
   pub fn word(term: &str, start: usize, index: usize) -> Token {
     Token {
@@ -128,7 +138,7 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   /// tokenizer.ordinary_char('a');
   ///
   /// let a_count = tokenizer
-  ///   .filter(|token| token.is_character())
+  ///   .filter(|token| token.is_character_equal('a'))
   ///   .count();
   ///
   /// assert_eq!(a_count, 5);
@@ -232,7 +242,7 @@ impl<'a> StringTokenizer<'a> {
   /// tokenizer.ordinary_char('a');
   ///
   /// let a_count = tokenizer
-  ///   .filter(|token| token.is_character())
+  ///   .filter(|token| token.is_character_equal('a'))
   ///   .count();
   ///
   /// assert_eq!(a_count, 5);
@@ -328,7 +338,7 @@ mod token_tests {
     assert_eq!(char_token.is_character(), true);
 
     let word_token = Token {
-      kind: TokenKind::Word("a".to_string()),
+      kind: TokenKind::Word(String::from("a")),
       start: 0,
       index: 0,
     };
@@ -336,9 +346,20 @@ mod token_tests {
   }
 
   #[test]
+  fn is_character_equal() {
+    let char_token = Token {
+      kind: TokenKind::Character('a'),
+      start: 0,
+      index: 0,
+    };
+    assert_eq!(char_token.is_character_equal('a'), true);
+    assert_eq!(char_token.is_character_equal('b'), false);
+  }
+
+  #[test]
   fn is_word() {
     let word_token = Token {
-      kind: TokenKind::Word("a".to_string()),
+      kind: TokenKind::Word(String::from("a")),
       start: 0,
       index: 0,
     };

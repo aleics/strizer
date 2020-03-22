@@ -9,7 +9,9 @@ fn main() -> io::Result<()> {
   let mut tokenizer = StreamTokenizer::new(f);
   tokenizer.ordinary_char('a');
 
-  let a_count = tokenizer.filter(|token| token.is_character()).count();
+  let a_count = tokenizer
+    .filter(|token| token.is_character_equal('a'))
+    .count();
 
   println!("Number of a: {}", a_count);
 
