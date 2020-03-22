@@ -9,11 +9,19 @@ fn main() -> io::Result<()> {
   let mut tokenizer = StreamTokenizer::new(f);
   tokenizer.ordinary_char('a');
 
-  let a_count = tokenizer
-    .filter(|token| token.is_character_equal('a'))
-    .count();
+  let mut a_count = 0;
+  let mut sit_count = 0;
 
-  println!("Number of a: {}", a_count);
+  tokenizer.for_each(|token| {
+    if token.is_character_equal('a') {
+      a_count += 1;
+    } else if token.is_word_equal("sit") {
+      sit_count += 1;
+    }
+  });
+
+  println!("Number of 'a': {}", a_count);
+  println!("Number of \"sit\": {}", sit_count);
 
   Ok(())
 }

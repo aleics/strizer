@@ -71,6 +71,17 @@ impl Token {
       _ => false,
     }
   }
+
+  /// Returns `true` if the `Token` is [`TokenKind::Word`] and equal to the `input` string
+  /// reference.
+  ///
+  /// [`TokenKind::Word`]: enum.TokenKind.html#variant.Word
+  pub fn is_word_equal(&self, input: &str) -> bool {
+    match self.kind {
+      TokenKind::Word(ref word) => word == input,
+      _ => false,
+    }
+  }
 }
 
 /// `StreamTokenizer<R>` defines the structure for the tokenization of a given input that implements
@@ -371,6 +382,17 @@ mod token_tests {
       index: 0,
     };
     assert_eq!(char_token.is_word(), false);
+  }
+
+  #[test]
+  fn is_word_equal() {
+    let word_token = Token {
+      kind: TokenKind::Word(String::from("a")),
+      start: 0,
+      index: 0,
+    };
+    assert_eq!(word_token.is_word_equal("a"), true);
+    assert_eq!(word_token.is_word_equal("b"), false);
   }
 }
 
