@@ -20,16 +20,14 @@ pub enum TokenKind {
 pub struct Token {
   pub kind: TokenKind,
   start: usize,
-  index: usize,
 }
 
 impl Token {
   /// Creates a character token with a given start position (in bytes) and an index.
-  pub fn character(character: char, start: usize, index: usize) -> Token {
+  pub fn character(character: char, start: usize) -> Token {
     Token {
       kind: TokenKind::Character(character),
       start,
-      index,
     }
   }
 
@@ -54,11 +52,10 @@ impl Token {
   }
 
   /// Creates a word token with a given start position (in bytes) and an index.
-  pub fn word(term: &str, start: usize, index: usize) -> Token {
+  pub fn word(term: &str, start: usize) -> Token {
     Token {
       kind: TokenKind::Word(term.to_owned()),
       start,
-      index,
     }
   }
 
@@ -191,7 +188,6 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
           character,
           &self.ordinary_chars,
           self.offset,
-          self.index,
         );
 
         self.offset += length;
@@ -276,7 +272,6 @@ impl<'a> Iterator for StringTokenizer<'a> {
         character,
         &self.ordinary_chars,
         self.offset,
-        self.index,
       );
 
       self.offset += length;
@@ -295,34 +290,28 @@ fn extract_token(
   character: char,
   delimiters: &[char],
   offset: usize,
-  index: usize,
 ) -> (Option<Token>, usize) {
   if character.is_whitespace() {
     return (None, character.len_utf8());
   }
 
   let (token, length) = if delimiters.contains(&character) {
-    extract_character_token(character, offset, index)
+    extract_character_token(character, offset)
   } else {
-    extract_word_token(&input, &delimiters, offset, index)
+    extract_word_token(&input, &delimiters, offset)
   };
 
   (Some(token), length)
 }
 
-fn extract_character_token(character: char, offset: usize, index: usize) -> (Token, usize) {
-  let token = Token::character(character, offset, index);
+fn extract_character_token(character: char, offset: usize) -> (Token, usize) {
+  let token = Token::character(character, offset);
   (token, character.len_utf8())
 }
 
-fn extract_word_token<'a>(
-  input: &'a str,
-  delimiters: &'a [char],
-  offset: usize,
-  index: usize,
-) -> (Token, usize) {
+fn extract_word_token<'a>(input: &'a str, delimiters: &'a [char], offset: usize) -> (Token, usize) {
   let word = extract_word(input, delimiters);
-  let token = Token::word(word, offset, index);
+  let token = Token::word(word, offset);
 
   (token, word.len())
 }
@@ -344,14 +333,12 @@ mod token_tests {
     let char_token = Token {
       kind: TokenKind::Character('a'),
       start: 0,
-      index: 0,
     };
     assert_eq!(char_token.is_character(), true);
 
     let word_token = Token {
       kind: TokenKind::Word(String::from("a")),
       start: 0,
-      index: 0,
     };
     assert_eq!(word_token.is_character(), false);
   }
@@ -361,7 +348,6 @@ mod token_tests {
     let char_token = Token {
       kind: TokenKind::Character('a'),
       start: 0,
-      index: 0,
     };
     assert_eq!(char_token.is_character_equal('a'), true);
     assert_eq!(char_token.is_character_equal('b'), false);
@@ -372,14 +358,12 @@ mod token_tests {
     let word_token = Token {
       kind: TokenKind::Word(String::from("a")),
       start: 0,
-      index: 0,
     };
     assert_eq!(word_token.is_word(), true);
 
     let char_token = Token {
       kind: TokenKind::Character('a'),
       start: 0,
-      index: 0,
     };
     assert_eq!(char_token.is_word(), false);
   }
@@ -389,7 +373,6 @@ mod token_tests {
     let word_token = Token {
       kind: TokenKind::Word(String::from("a")),
       start: 0,
-      index: 0,
     };
     assert_eq!(word_token.is_word_equal("a"), true);
     assert_eq!(word_token.is_word_equal("b"), false);
@@ -420,122 +403,113 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handles_multiple_whitespace_with_chars() {
-    let mut string_tokenizer = StringTokenizer::new(" a ");
-    string_tokenizer.ordinary_char('a');
+    let mut tokenizer = StringTokenizer::new(" a ");
+    tokenizer.ordinary_char('a');
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 1);
-    assert_eq!(result.get(0), Some(&Token::character('a', 1, 0)));
+    assert_eq!(result.get(0), Some(&Token::character('a', 1)));
   }
 
   #[test]
   fn handles_multiple_whitespace_with_word() {
-    let string_tokenizer = StringTokenizer::new(" hello world ");
+    let tokenizer = StringTokenizer::new(" hello world ");
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 1, 0)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 7, 1)));
+    assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
+    assert_eq!(result.get(1), Some(&Token::word("world", 7)));
   }
 
   #[test]
   fn handles_whitespace_with_word() {
-    let string_tokenizer = StringTokenizer::new("hello world");
+    let tokenizer = StringTokenizer::new("hello world");
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 0, 0)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 6, 1)));
+    assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
+    assert_eq!(result.get(1), Some(&Token::word("world", 6)));
   }
 
   #[test]
   fn handles_new_line() {
-    let string_tokenizer = StringTokenizer::new("hello \n world");
+    let tokenizer = StringTokenizer::new("hello \n world");
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 0, 0)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 8, 1)));
+    assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
+    assert_eq!(result.get(1), Some(&Token::word("world", 8)));
   }
 
   #[test]
   fn handle_flags_chars_word() {
-    let string_tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}");
+    let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}");
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 1);
     assert_eq!(
       result.get(0),
-      Some(&Token::word("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}", 0, 0))
+      Some(&Token::word("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}", 0))
     );
   }
 
   #[test]
   fn handle_flags_with_ordinary_flag() {
-    let mut string_tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}");
-    string_tokenizer.ordinary_char('\u{1F1F8}');
+    let mut tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}");
+    tokenizer.ordinary_char('\u{1F1F8}');
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
-    assert_eq!(result.get(0), Some(&Token::word("\u{1F1F7}", 0, 0)));
-    assert_eq!(result.get(1), Some(&Token::character('\u{1F1F8}', 4, 1)));
-    assert_eq!(
-      result.get(2),
-      Some(&Token::word("\u{1F1EE}\u{1F1F4}", 8, 2))
-    );
+    assert_eq!(result.get(0), Some(&Token::word("\u{1F1F7}", 0)));
+    assert_eq!(result.get(1), Some(&Token::character('\u{1F1F8}', 4)));
+    assert_eq!(result.get(2), Some(&Token::word("\u{1F1EE}\u{1F1F4}", 8)));
   }
 
   #[test]
   fn handle_flags_with_multiple_ordinary_char() {
-    let mut string_tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}a\u{1F1EE}b\u{1F1F4}");
-    string_tokenizer.ordinary_char('a');
-    string_tokenizer.ordinary_char('b');
+    let mut tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}a\u{1F1EE}b\u{1F1F4}");
+    tokenizer.ordinary_char('a');
+    tokenizer.ordinary_char('b');
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 5);
-    assert_eq!(
-      result.get(0),
-      Some(&Token::word("\u{1F1F7}\u{1F1F8}", 0, 0))
-    );
-    assert_eq!(result.get(1), Some(&Token::character('a', 8, 1)));
-    assert_eq!(result.get(2), Some(&Token::word("\u{1F1EE}", 9, 2)));
-    assert_eq!(result.get(3), Some(&Token::character('b', 13, 3)));
-    assert_eq!(result.get(4), Some(&Token::word("\u{1F1F4}", 14, 4)));
+    assert_eq!(result.get(0), Some(&Token::word("\u{1F1F7}\u{1F1F8}", 0)));
+    assert_eq!(result.get(1), Some(&Token::character('a', 8)));
+    assert_eq!(result.get(2), Some(&Token::word("\u{1F1EE}", 9)));
+    assert_eq!(result.get(3), Some(&Token::character('b', 13)));
+    assert_eq!(result.get(4), Some(&Token::word("\u{1F1F4}", 14)));
   }
 
   #[test]
   fn handle_flags_with_multiple_whitespaces() {
-    let string_tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8} \u{1F1EE}\n\u{1F1F4}");
+    let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8} \u{1F1EE}\n\u{1F1F4}");
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
-    assert_eq!(
-      result.get(0),
-      Some(&Token::word("\u{1F1F7}\u{1F1F8}", 0, 0))
-    );
-    assert_eq!(result.get(1), Some(&Token::word("\u{1F1EE}", 9, 1)));
-    assert_eq!(result.get(2), Some(&Token::word("\u{1F1F4}", 14, 2)));
+    assert_eq!(result.get(0), Some(&Token::word("\u{1F1F7}\u{1F1F8}", 0)));
+    assert_eq!(result.get(1), Some(&Token::word("\u{1F1EE}", 9)));
+    assert_eq!(result.get(2), Some(&Token::word("\u{1F1F4}", 14)));
   }
 
   #[test]
   fn handle_chinese_char() {
-    let string_tokenizer = StringTokenizer::new("hello ⼦");
+    let tokenizer = StringTokenizer::new("hello ⼦");
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 0, 0)));
-    assert_eq!(result.get(1), Some(&Token::word("⼦", 6, 1)));
+    assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
+    assert_eq!(result.get(1), Some(&Token::word("⼦", 6)));
   }
 
   #[test]
   fn handle_chinese_ordinary_char() {
-    let mut string_tokenizer = StringTokenizer::new("hello ⼦");
-    string_tokenizer.ordinary_char('⼦');
+    let mut tokenizer = StringTokenizer::new("hello ⼦");
+    tokenizer.ordinary_char('⼦');
 
-    let result = string_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 0, 0)));
-    assert_eq!(result.get(1), Some(&Token::character('⼦', 6, 1)));
+    assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
+    assert_eq!(result.get(1), Some(&Token::character('⼦', 6)));
   }
 }
 
@@ -555,28 +529,28 @@ mod stream_tokenizer_tests {
   fn handles_multiple_whitespace_with_chars() {
     let cursor = &mut Cursor::new(" a ");
 
-    let mut stream_tokenizer = StreamTokenizer::new(cursor);
-    stream_tokenizer.ordinary_char('a');
+    let mut tokenizer = StreamTokenizer::new(cursor);
+    tokenizer.ordinary_char('a');
 
-    let result = stream_tokenizer.collect::<Vec<Token>>();
+    let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 1);
-    assert_eq!(result.get(0), Some(&Token::character('a', 1, 0)));
+    assert_eq!(result.get(0), Some(&Token::character('a', 1)));
   }
 
   #[test]
   fn handles_multiple_whitespace_with_word() {
     let result = StreamTokenizer::new(&mut Cursor::new(" hello world ")).collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 1, 0)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 7, 1)));
+    assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
+    assert_eq!(result.get(1), Some(&Token::word("world", 7)));
   }
 
   #[test]
   fn handles_multiple_lines_with_words() {
     let result = StreamTokenizer::new(&mut Cursor::new(" hello \n world ")).collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 1, 0)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 9, 1)));
+    assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
+    assert_eq!(result.get(1), Some(&Token::word("world", 9)));
   }
 
   #[test]
@@ -588,9 +562,9 @@ mod stream_tokenizer_tests {
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 1, 0)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 9, 1)));
-    assert_eq!(result.get(2), Some(&Token::character('!', 17, 2)));
+    assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
+    assert_eq!(result.get(1), Some(&Token::word("world", 9)));
+    assert_eq!(result.get(2), Some(&Token::character('!', 17)));
   }
 
   #[test]
@@ -602,12 +576,9 @@ mod stream_tokenizer_tests {
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 4);
-    assert_eq!(result.get(0), Some(&Token::character('\u{1F1EE}', 0, 0)));
-    assert_eq!(result.get(1), Some(&Token::character('\u{1F1EE}', 6, 1)));
-    assert_eq!(result.get(2), Some(&Token::word("\u{1F1F8}", 10, 2)));
-    assert_eq!(
-      result.get(3),
-      Some(&Token::word("\u{1F1F7}\u{1F1F8}", 15, 3))
-    );
+    assert_eq!(result.get(0), Some(&Token::character('\u{1F1EE}', 0)));
+    assert_eq!(result.get(1), Some(&Token::character('\u{1F1EE}', 6)));
+    assert_eq!(result.get(2), Some(&Token::word("\u{1F1F8}", 10)));
+    assert_eq!(result.get(3), Some(&Token::word("\u{1F1F7}\u{1F1F8}", 15)));
   }
 }
