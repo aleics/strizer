@@ -23,7 +23,7 @@ pub struct Token {
 }
 
 impl Token {
-  /// Creates a character token with a given start position (in bytes) and an index.
+  /// Creates a character token with a given start position (in bytes).
   pub fn character(character: char, start: usize) -> Token {
     Token {
       kind: TokenKind::Character(character),
@@ -51,7 +51,7 @@ impl Token {
     }
   }
 
-  /// Creates a word token with a given start position (in bytes) and an index.
+  /// Creates a word token with a given start position (in bytes).
   pub fn word(term: &str, start: usize) -> Token {
     Token {
       kind: TokenKind::Word(term.to_owned()),
@@ -113,7 +113,6 @@ pub struct StreamTokenizer<'a, R> {
   current_line: Option<String>,
   line_offset: usize,
   offset: usize,
-  index: usize,
   ordinary_chars: Vec<char>,
 }
 
@@ -128,7 +127,6 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
       current_line: None,
       line_offset: 0,
       offset: 0,
-      index: 0,
       ordinary_chars: Vec::new(),
     }
   }
@@ -194,7 +192,6 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
         self.line_offset += length;
 
         if token.is_some() {
-          self.index += 1;
           return token;
         }
       }
@@ -221,7 +218,6 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
 pub struct StringTokenizer<'a> {
   input: &'a str,
   offset: usize,
-  index: usize,
   ordinary_chars: Vec<char>,
 }
 
@@ -232,7 +228,6 @@ impl<'a> StringTokenizer<'a> {
     StringTokenizer {
       input,
       offset: 0,
-      index: 0,
       ordinary_chars: Vec::new(),
     }
   }
@@ -277,7 +272,6 @@ impl<'a> Iterator for StringTokenizer<'a> {
       self.offset += length;
 
       if token.is_some() {
-        self.index += 1;
         return token;
       }
     }
