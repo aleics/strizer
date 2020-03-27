@@ -7,6 +7,7 @@ use std::io::BufRead;
 pub enum TokenKind {
   Character(char),
   Word(String),
+  Number(f64),
 }
 
 /// `Token` describes the primitive that is returned while iterating through a Tokenizer.
@@ -79,6 +80,35 @@ impl Token {
       _ => false,
     }
   }
+
+  /// Creates a number token with a given start position (in bytes).
+  pub fn number(number: f64, start: usize) -> Token {
+    Token {
+      kind: TokenKind::Number(number),
+      start,
+    }
+  }
+
+  /// Returns `true` if the `Token` is [`TokenKind::Number`]
+  ///
+  /// [`TokenKind::Number`]: enum.TokenKind.html#variant.Number
+  pub fn is_number(&self) -> bool {
+    match self.kind {
+      TokenKind::Number(_) => true,
+      _ => false,
+    }
+  }
+
+  /// Returns `true` if the `Token` is [`TokenKind::Number`] and equal to the `input` string
+  /// reference.
+  ///
+  /// [`TokenKind::Number`]: enum.TokenKind.html#variant.Number
+  pub fn is_number_equal(&self, input: f64) -> bool {
+    match self.kind {
+      TokenKind::Number(number) => number == input,
+      _ => false,
+    }
+  }
 }
 
 /// `StreamTokenizer<R>` defines the structure for the tokenization of a given input that implements
@@ -99,7 +129,7 @@ impl Token {
 ///   let error_count = StreamTokenizer::new(&mut reader)
 ///     .filter(|token| match &token.kind {
 ///       TokenKind::Word(word) => word == "ERROR",
-///       TokenKind::Character(_) => false
+///       _ => false
 ///     })
 ///     .count();
 ///   println!("number of error logs: {}", error_count);
@@ -370,6 +400,31 @@ mod token_tests {
     };
     assert_eq!(word_token.is_word_equal("a"), true);
     assert_eq!(word_token.is_word_equal("b"), false);
+  }
+
+  #[test]
+  fn is_number() {
+    let number_token = Token {
+      kind: TokenKind::Number(1.0),
+      start: 0,
+    };
+    assert_eq!(number_token.is_number(), true);
+
+    let char_token = Token {
+      kind: TokenKind::Character('a'),
+      start: 0,
+    };
+    assert_eq!(char_token.is_number(), false);
+  }
+
+  #[test]
+  fn is_number_equal() {
+    let number_token = Token {
+      kind: TokenKind::Number(1.0),
+      start: 0,
+    };
+    assert_eq!(number_token.is_number_equal(1.0), true);
+    assert_eq!(number_token.is_number_equal(-1.0), false);
   }
 }
 
