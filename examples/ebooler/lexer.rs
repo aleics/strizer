@@ -56,6 +56,7 @@ impl<'a> Iterator for Lexer<'a> {
     match token.kind {
       TokenKind::Character(character) => get_character_symbol(character),
       TokenKind::Word(word) => get_word_symbol(&word),
+      _ => None,
     }
   }
 }

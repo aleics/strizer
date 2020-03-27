@@ -7,7 +7,7 @@ use std::io::BufRead;
 pub enum TokenKind {
   Character(char),
   Word(String),
-  Number(f64),
+  Number(f32),
 }
 
 /// `Token` describes the primitive that is returned while iterating through a Tokenizer.
@@ -82,7 +82,7 @@ impl Token {
   }
 
   /// Creates a number token with a given start position (in bytes).
-  pub fn number(number: f64, start: usize) -> Token {
+  pub fn number(number: f32, start: usize) -> Token {
     Token {
       kind: TokenKind::Number(number),
       start,
@@ -103,9 +103,9 @@ impl Token {
   /// reference.
   ///
   /// [`TokenKind::Number`]: enum.TokenKind.html#variant.Number
-  pub fn is_number_equal(&self, input: f64) -> bool {
+  pub fn is_number_equal(&self, input: f32) -> bool {
     match self.kind {
-      TokenKind::Number(number) => number == input,
+      TokenKind::Number(number) => (number - input).abs() < std::f32::EPSILON,
       _ => false,
     }
   }
@@ -322,7 +322,7 @@ fn extract_token(
   let (token, length) = if delimiters.contains(&character) {
     extract_character_token(character, offset)
   } else {
-    extract_word_token(&input, &delimiters, offset)
+    extract_token_chunk(&input, &delimiters, offset)
   };
 
   (Some(token), length)
@@ -333,14 +333,23 @@ fn extract_character_token(character: char, offset: usize) -> (Token, usize) {
   (token, character.len_utf8())
 }
 
-fn extract_word_token<'a>(input: &'a str, delimiters: &'a [char], offset: usize) -> (Token, usize) {
-  let word = extract_word(input, delimiters);
-  let token = Token::word(word, offset);
+fn extract_token_chunk<'a>(
+  input: &'a str,
+  delimiters: &'a [char],
+  offset: usize,
+) -> (Token, usize) {
+  let chunk = extract_chunk(input, delimiters);
 
-  (token, word.len())
+  let token = if let Ok(number) = chunk.parse() {
+    Token::number(number, offset)
+  } else {
+    Token::word(chunk, offset)
+  };
+
+  (token, chunk.len())
 }
 
-fn extract_word<'a>(input: &'a str, delimiters: &'a [char]) -> &'a str {
+fn extract_chunk<'a>(input: &'a str, delimiters: &'a [char]) -> &'a str {
   input
     .char_indices()
     .find(|(_, c)| c.is_whitespace() || delimiters.contains(c))
@@ -560,6 +569,65 @@ mod string_tokenizer_tests {
     assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
     assert_eq!(result.get(1), Some(&Token::character('⼦', 6)));
   }
+
+  #[test]
+  fn handle_natural_numbers() {
+    let tokenizer = StringTokenizer::new("1 2 3");
+
+    let result = tokenizer.collect::<Vec<Token>>();
+    assert_eq!(result.len(), 3);
+    assert_eq!(result.get(0), Some(&Token::number(1f32, 0)));
+    assert_eq!(result.get(1), Some(&Token::number(2f32, 2)));
+    assert_eq!(result.get(2), Some(&Token::number(3f32, 4)));
+  }
+
+  #[test]
+  fn handle_decimal_numbers() {
+    let tokenizer = StringTokenizer::new("1.1 2.2 3.3");
+
+    let result = tokenizer.collect::<Vec<Token>>();
+    assert_eq!(result.len(), 3);
+    assert_eq!(result.get(0), Some(&Token::number(1.1f32, 0)));
+    assert_eq!(result.get(1), Some(&Token::number(2.2f32, 4)));
+    assert_eq!(result.get(2), Some(&Token::number(3.3f32, 8)));
+  }
+
+  #[test]
+  fn handle_negative_integer_numbers() {
+    let tokenizer = StringTokenizer::new("-1 -2 -3");
+
+    let result = tokenizer.collect::<Vec<Token>>();
+    assert_eq!(result.len(), 3);
+    assert_eq!(result.get(0), Some(&Token::number(-1f32, 0)));
+    assert_eq!(result.get(1), Some(&Token::number(-2f32, 3)));
+    assert_eq!(result.get(2), Some(&Token::number(-3f32, 6)));
+  }
+
+  #[test]
+  fn handle_negative_decimal_numbers() {
+    let tokenizer = StringTokenizer::new("-1.1 -2.2 -3.3");
+
+    let result = tokenizer.collect::<Vec<Token>>();
+    assert_eq!(result.len(), 3);
+    assert_eq!(result.get(0), Some(&Token::number(-1.1f32, 0)));
+    assert_eq!(result.get(1), Some(&Token::number(-2.2f32, 5)));
+    assert_eq!(result.get(2), Some(&Token::number(-3.3f32, 10)));
+  }
+
+  #[test]
+  fn handle_numbers_with_ordinary_chars() {
+    let mut tokenizer = StringTokenizer::new("-1 -2 -3");
+    tokenizer.ordinary_char('-');
+
+    let result = tokenizer.collect::<Vec<Token>>();
+    assert_eq!(result.len(), 6);
+    assert_eq!(result.get(0), Some(&Token::character('-', 0)));
+    assert_eq!(result.get(1), Some(&Token::number(1f32, 1)));
+    assert_eq!(result.get(2), Some(&Token::character('-', 3)));
+    assert_eq!(result.get(3), Some(&Token::number(2f32, 4)));
+    assert_eq!(result.get(4), Some(&Token::character('-', 6)));
+    assert_eq!(result.get(5), Some(&Token::number(3f32, 7)));
+  }
 }
 
 #[cfg(test)]
@@ -629,5 +697,34 @@ mod stream_tokenizer_tests {
     assert_eq!(result.get(1), Some(&Token::character('\u{1F1EE}', 6)));
     assert_eq!(result.get(2), Some(&Token::word("\u{1F1F8}", 10)));
     assert_eq!(result.get(3), Some(&Token::word("\u{1F1F7}\u{1F1F8}", 15)));
+  }
+
+  #[test]
+  fn handle_multiple_lines_numbers() {
+    let cursor = &mut Cursor::new("1.1\n2\n\n-3\n-4.4");
+    let tokenizer = StreamTokenizer::new(cursor);
+
+    let result = tokenizer.collect::<Vec<Token>>();
+    assert_eq!(result.len(), 4);
+    assert_eq!(result.get(0), Some(&Token::number(1.1f32, 0)));
+    assert_eq!(result.get(1), Some(&Token::number(2f32, 4)));
+    assert_eq!(result.get(2), Some(&Token::number(-3f32, 7)));
+    assert_eq!(result.get(3), Some(&Token::number(-4.4f32, 10)));
+  }
+
+  #[test]
+  fn handle_multiple_lines_numbers_with_ordinary_chars() {
+    let cursor = &mut Cursor::new("1.1\n2\n\n-3\n-4.4");
+    let mut tokenizer = StreamTokenizer::new(cursor);
+    tokenizer.ordinary_char('-');
+
+    let result = tokenizer.collect::<Vec<Token>>();
+    assert_eq!(result.len(), 6);
+    assert_eq!(result.get(0), Some(&Token::number(1.1f32, 0)));
+    assert_eq!(result.get(1), Some(&Token::number(2f32, 4)));
+    assert_eq!(result.get(2), Some(&Token::character('-', 7)));
+    assert_eq!(result.get(3), Some(&Token::number(3f32, 8)));
+    assert_eq!(result.get(4), Some(&Token::character('-', 10)));
+    assert_eq!(result.get(5), Some(&Token::number(4.4f32, 11)));
   }
 }
