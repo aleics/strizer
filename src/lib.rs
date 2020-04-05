@@ -85,8 +85,8 @@ impl Token {
   ///
   /// [`TokenKind::Word`]: enum.TokenKind.html#variant.Word
   pub fn is_word_equal(&self, input: &str) -> bool {
-    match self.kind {
-      TokenKind::Word(ref word) => word == input,
+    match &self.kind {
+      TokenKind::Word(word) => word == input,
       _ => false,
     }
   }
