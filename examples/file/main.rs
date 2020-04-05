@@ -6,8 +6,7 @@ fn main() -> io::Result<()> {
   let f = File::open("examples/file/data.txt")?;
   let f = &mut io::BufReader::new(f);
 
-  let mut tokenizer = StreamTokenizer::new(f);
-  tokenizer.ordinary_char('a');
+  let tokenizer = StreamTokenizer::new(f, &['a']);
 
   let mut a_count = 0;
   let mut sit_count = 0;

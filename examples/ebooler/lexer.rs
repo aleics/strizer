@@ -36,14 +36,9 @@ pub(crate) struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
   pub(crate) fn new(text: &'a str) -> Lexer<'a> {
-    let mut tokenizer = StringTokenizer::new(text);
-    tokenizer.ordinary_char('(');
-    tokenizer.ordinary_char(')');
-    tokenizer.ordinary_char('&');
-    tokenizer.ordinary_char('|');
-    tokenizer.ordinary_char('!');
-
-    Lexer { tokenizer }
+    Lexer {
+      tokenizer: StringTokenizer::new(text, &['(', ')', '&', '|', '!']),
+    }
   }
 }
 

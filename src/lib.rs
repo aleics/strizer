@@ -136,7 +136,7 @@ impl Token {
 ///   let file = File::open("log.txt")?;
 ///   let mut reader = BufReader::new(file);
 ///
-///   let error_count = StreamTokenizer::new(&mut reader)
+///   let error_count = StreamTokenizer::new(&mut reader, &[])
 ///     .filter(|token| token.is_word_equal("ERROR"))
 ///     .count();
 ///   println!("number of error logs: {}", error_count);
@@ -150,7 +150,7 @@ pub struct StreamTokenizer<'a, R> {
   current_line: Option<String>,
   line_offset: usize,
   offset: usize,
-  ordinary_chars: Vec<char>,
+  ordinary_chars: &'a [char],
 }
 
 impl<'a, R: BufRead> StreamTokenizer<'a, R> {
@@ -158,17 +158,6 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   /// and data used while iterating is also initialized.
   ///
   /// [`BufRead`]: https://doc.rust-lang.org/std/io/trait.BufRead.html
-  pub fn new(input: &'a mut R) -> Self {
-    StreamTokenizer {
-      input,
-      current_line: None,
-      line_offset: 0,
-      offset: 0,
-      ordinary_chars: Vec::new(),
-    }
-  }
-
-  /// Includes a new ordinary character that is identified during iteration as character [`Token`].
   ///
   /// # Examples
   ///
@@ -177,8 +166,7 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   /// use strizer::{StreamTokenizer, Token, TokenKind};
   ///
   /// let cursor = &mut Cursor::new("abracadabra");
-  /// let mut tokenizer = StreamTokenizer::new(cursor);
-  /// tokenizer.ordinary_char('a');
+  /// let tokenizer = StreamTokenizer::new(cursor, &['a']);
   ///
   /// let a_count = tokenizer
   ///   .filter(|token| token.is_character_equal('a'))
@@ -188,8 +176,14 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   /// ```
   ///
   /// [`Token`]: struct.Token.html
-  pub fn ordinary_char(&mut self, c: char) {
-    self.ordinary_chars.push(c);
+  pub fn new(input: &'a mut R, ordinary_chars: &'a [char]) -> Self {
+    StreamTokenizer {
+      input,
+      current_line: None,
+      line_offset: 0,
+      offset: 0,
+      ordinary_chars,
+    }
   }
 
   /// Reads the next line from the inner [`BufRead`]. Returns `None` if the line couldn't be read
@@ -248,37 +242,26 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
 /// ```
 /// use strizer::StringTokenizer;
 ///
-/// let word_count = StringTokenizer::new("hello world").count();
+/// let word_count = StringTokenizer::new("hello world", &[]).count();
 /// assert_eq!(word_count, 2);
 /// ```
 #[derive(Clone)]
 pub struct StringTokenizer<'a> {
   input: &'a str,
   offset: usize,
-  ordinary_chars: Vec<char>,
+  ordinary_chars: &'a [char],
 }
 
 impl<'a> StringTokenizer<'a> {
   /// Creates a new `StringTokenizer` with a given string input. The different offsets
   /// and data used while iterating is also initialized.
-  pub fn new(input: &'a str) -> Self {
-    StringTokenizer {
-      input,
-      offset: 0,
-      ordinary_chars: Vec::new(),
-    }
-  }
-
-  /// Includes a new ordinary character that is identified during iteration as character [`Token`].
-  ///
   /// # Examples
   ///
   /// ```
   /// use std::io::Cursor;
   /// use strizer::{StringTokenizer, Token, TokenKind};
   ///
-  /// let mut tokenizer = StringTokenizer::new("abracadabra");
-  /// tokenizer.ordinary_char('a');
+  /// let tokenizer = StringTokenizer::new("abracadabra", &['a']);
   ///
   /// let a_count = tokenizer
   ///   .filter(|token| token.is_character_equal('a'))
@@ -286,10 +269,12 @@ impl<'a> StringTokenizer<'a> {
   ///
   /// assert_eq!(a_count, 5);
   /// ```
-  ///
-  /// [`Token`]: struct.Token.html
-  pub fn ordinary_char(&mut self, c: char) {
-    self.ordinary_chars.push(c);
+  pub fn new(input: &'a str, ordinary_chars: &'a [char]) -> Self {
+    StringTokenizer {
+      input,
+      offset: 0,
+      ordinary_chars,
+    }
   }
 }
 
@@ -447,26 +432,25 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handles_whitespace() {
-    let result = StringTokenizer::new(" ").collect::<Vec<Token>>();
+    let result = StringTokenizer::new(" ", &[]).collect::<Vec<Token>>();
     assert_eq!(result.len(), 0);
   }
 
   #[test]
   fn handle_custom_whitespace() {
-    let result = StringTokenizer::new("\u{2000}").collect::<Vec<Token>>();
+    let result = StringTokenizer::new("\u{2000}", &[]).collect::<Vec<Token>>();
     assert_eq!(result.len(), 0);
   }
 
   #[test]
   fn handles_multiple_whitespace() {
-    let result = StringTokenizer::new("  ").collect::<Vec<Token>>();
+    let result = StringTokenizer::new("  ", &[]).collect::<Vec<Token>>();
     assert_eq!(result.len(), 0);
   }
 
   #[test]
   fn handles_whitespace_as_char() {
-    let mut tokenizer = StringTokenizer::new(" ");
-    tokenizer.ordinary_char(' ');
+    let tokenizer = StringTokenizer::new(" ", &[' ']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 1);
@@ -475,8 +459,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handles_multiple_whitespace_with_chars() {
-    let mut tokenizer = StringTokenizer::new(" a ");
-    tokenizer.ordinary_char('a');
+    let tokenizer = StringTokenizer::new(" a ", &['a']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 1);
@@ -485,7 +468,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handles_multiple_whitespace_with_word() {
-    let tokenizer = StringTokenizer::new(" hello world ");
+    let tokenizer = StringTokenizer::new(" hello world ", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
@@ -495,7 +478,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handles_whitespace_with_word() {
-    let tokenizer = StringTokenizer::new("hello world");
+    let tokenizer = StringTokenizer::new("hello world", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
@@ -505,7 +488,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handles_new_line() {
-    let tokenizer = StringTokenizer::new("hello \n world");
+    let tokenizer = StringTokenizer::new("hello \n world", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
@@ -515,7 +498,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_flags_chars_word() {
-    let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}");
+    let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 1);
@@ -527,8 +510,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_flags_with_ordinary_flag() {
-    let mut tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}");
-    tokenizer.ordinary_char('\u{1F1F8}');
+    let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}", &['\u{1F1F8}']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
@@ -539,9 +521,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_flags_with_multiple_ordinary_char() {
-    let mut tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}a\u{1F1EE}b\u{1F1F4}");
-    tokenizer.ordinary_char('a');
-    tokenizer.ordinary_char('b');
+    let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}a\u{1F1EE}b\u{1F1F4}", &['a', 'b']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 5);
@@ -554,7 +534,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_flags_with_multiple_whitespaces() {
-    let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8} \u{1F1EE}\n\u{1F1F4}");
+    let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8} \u{1F1EE}\n\u{1F1F4}", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
@@ -565,7 +545,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_chinese_char() {
-    let tokenizer = StringTokenizer::new("hello ⼦");
+    let tokenizer = StringTokenizer::new("hello ⼦", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
@@ -575,8 +555,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_chinese_ordinary_char() {
-    let mut tokenizer = StringTokenizer::new("hello ⼦");
-    tokenizer.ordinary_char('⼦');
+    let tokenizer = StringTokenizer::new("hello ⼦", &['⼦']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
@@ -586,7 +565,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_natural_numbers() {
-    let tokenizer = StringTokenizer::new("1 2 3");
+    let tokenizer = StringTokenizer::new("1 2 3", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
@@ -597,7 +576,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_decimal_numbers() {
-    let tokenizer = StringTokenizer::new("1.1 2.2 3.3");
+    let tokenizer = StringTokenizer::new("1.1 2.2 3.3", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
@@ -608,7 +587,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_negative_integer_numbers() {
-    let tokenizer = StringTokenizer::new("-1 -2 -3");
+    let tokenizer = StringTokenizer::new("-1 -2 -3", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
@@ -619,7 +598,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_negative_decimal_numbers() {
-    let tokenizer = StringTokenizer::new("-1.1 -2.2 -3.3");
+    let tokenizer = StringTokenizer::new("-1.1 -2.2 -3.3", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
@@ -630,8 +609,7 @@ mod string_tokenizer_tests {
 
   #[test]
   fn handle_numbers_with_ordinary_chars() {
-    let mut tokenizer = StringTokenizer::new("-1 -2 -3");
-    tokenizer.ordinary_char('-');
+    let tokenizer = StringTokenizer::new("-1 -2 -3", &['-']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 6);
@@ -653,7 +631,7 @@ mod stream_tokenizer_tests {
   #[test]
   fn handles_multiple_lines_with_whitespace() {
     let result =
-      StreamTokenizer::new(&mut Cursor::new(" \n\u{2000}\n \n ")).collect::<Vec<Token>>();
+      StreamTokenizer::new(&mut Cursor::new(" \n\u{2000}\n \n "), &[]).collect::<Vec<Token>>();
     assert_eq!(result.len(), 0);
   }
 
@@ -661,8 +639,7 @@ mod stream_tokenizer_tests {
   fn handles_multiple_whitespace_with_chars() {
     let cursor = &mut Cursor::new(" a ");
 
-    let mut tokenizer = StreamTokenizer::new(cursor);
-    tokenizer.ordinary_char('a');
+    let tokenizer = StreamTokenizer::new(cursor, &['a']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 1);
@@ -671,7 +648,8 @@ mod stream_tokenizer_tests {
 
   #[test]
   fn handles_multiple_whitespace_with_word() {
-    let result = StreamTokenizer::new(&mut Cursor::new(" hello world ")).collect::<Vec<Token>>();
+    let result =
+      StreamTokenizer::new(&mut Cursor::new(" hello world "), &[]).collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
     assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
     assert_eq!(result.get(1), Some(&Token::word("world", 7)));
@@ -679,7 +657,8 @@ mod stream_tokenizer_tests {
 
   #[test]
   fn handles_multiple_lines_with_words() {
-    let result = StreamTokenizer::new(&mut Cursor::new(" hello \n world ")).collect::<Vec<Token>>();
+    let result =
+      StreamTokenizer::new(&mut Cursor::new(" hello \n world "), &[]).collect::<Vec<Token>>();
     assert_eq!(result.len(), 2);
     assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
     assert_eq!(result.get(1), Some(&Token::word("world", 9)));
@@ -689,8 +668,7 @@ mod stream_tokenizer_tests {
   fn handles_multiple_lines_with_words_and_ordinary_chars() {
     let cursor = &mut Cursor::new(" hello \n world \n\n!");
 
-    let mut tokenizer = StreamTokenizer::new(cursor);
-    tokenizer.ordinary_char('!');
+    let tokenizer = StreamTokenizer::new(cursor, &['!']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 3);
@@ -703,8 +681,7 @@ mod stream_tokenizer_tests {
   fn handles_multiple_lines_with_flag_chars() {
     let cursor = &mut Cursor::new("\u{1F1EE}\n\n\u{1F1EE}\u{1F1F8}\n\u{1F1F7}\u{1F1F8}");
 
-    let mut tokenizer = StreamTokenizer::new(cursor);
-    tokenizer.ordinary_char('\u{1F1EE}');
+    let tokenizer = StreamTokenizer::new(cursor, &['\u{1F1EE}']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 4);
@@ -717,7 +694,7 @@ mod stream_tokenizer_tests {
   #[test]
   fn handle_multiple_lines_numbers() {
     let cursor = &mut Cursor::new("1.1\n2\n\n-3\n-4.4");
-    let tokenizer = StreamTokenizer::new(cursor);
+    let tokenizer = StreamTokenizer::new(cursor, &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 4);
@@ -730,8 +707,7 @@ mod stream_tokenizer_tests {
   #[test]
   fn handle_multiple_lines_numbers_with_ordinary_chars() {
     let cursor = &mut Cursor::new("1.1\n2\n\n-3\n-4.4");
-    let mut tokenizer = StreamTokenizer::new(cursor);
-    tokenizer.ordinary_char('-');
+    let tokenizer = StreamTokenizer::new(cursor, &['-']);
 
     let result = tokenizer.collect::<Vec<Token>>();
     assert_eq!(result.len(), 6);
