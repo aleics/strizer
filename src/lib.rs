@@ -306,16 +306,16 @@ impl<'a> Iterator for StringTokenizer<'a> {
 fn extract_token(
   input: &str,
   character: char,
-  delimiters: &[char],
+  identifiers: &[char],
   offset: usize,
 ) -> (Option<Token>, usize) {
-  if delimiters.contains(&character) {
+  if identifiers.contains(&character) {
     let (token, length) = extract_character_token(character, offset);
     (Some(token), length)
   } else if character.is_whitespace() {
     (None, character.len_utf8())
   } else {
-    let (token, length) = extract_token_chunk(&input, &delimiters, offset);
+    let (token, length) = extract_token_chunk(&input, &identifiers, offset);
     (Some(token), length)
   }
 }
@@ -327,10 +327,10 @@ fn extract_character_token(character: char, offset: usize) -> (Token, usize) {
 
 fn extract_token_chunk<'a>(
   input: &'a str,
-  delimiters: &'a [char],
+  identifiers: &'a [char],
   offset: usize,
 ) -> (Token, usize) {
-  let chunk = extract_chunk(input, delimiters);
+  let chunk = extract_chunk(input, identifiers);
 
   let token = if let Ok(number) = chunk.parse() {
     Token::number(number, offset)
@@ -340,10 +340,10 @@ fn extract_token_chunk<'a>(
   (token, chunk.len())
 }
 
-fn extract_chunk<'a>(input: &'a str, delimiters: &'a [char]) -> &'a str {
+fn extract_chunk<'a>(input: &'a str, identifiers: &'a [char]) -> &'a str {
   input
     .char_indices()
-    .find(|(_, c)| c.is_whitespace() || delimiters.contains(c))
+    .find(|(_, c)| c.is_whitespace() || identifiers.contains(c))
     .map(|(index, _)| &input[..index])
     .unwrap_or(&input)
 }
