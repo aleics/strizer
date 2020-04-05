@@ -11,19 +11,29 @@ pub enum TokenKind {
 }
 
 /// `Token` describes the primitive that is returned while iterating through a Tokenizer.
-/// Tokens can be of different type or kind: [`TokenKind::Character`] or [`TokenKind::Word`].
-/// The associated data is stored in the Token, along with its start position (in bytes),
-/// and its index.
+/// Tokens can be of different type or kind:
+///
+///  * [`TokenKind::Character`]
+///  * [`TokenKind::Number`]
+///  * [`TokenKind::Word`].
+///
+/// The associated data is stored in the Token, along with its start position (in bytes).
 ///
 /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
+/// [`TokenKind::Number`]: enum.TokenKind.html#variant.Number
 /// [`TokenKind::Word`]: enum.TokenKind.html#variant.Word
 #[derive(PartialEq, Debug)]
 pub struct Token {
-  pub kind: TokenKind,
+  kind: TokenKind,
   start: usize,
 }
 
 impl Token {
+  /// Returns token's kind
+  pub fn kind(&self) -> &TokenKind {
+    &self.kind
+  }
+
   /// Creates a character token with a given start position (in bytes).
   pub fn character(character: char, start: usize) -> Token {
     Token {
