@@ -1,11 +1,17 @@
 use std::io::BufRead;
 
+#[derive(Clone, PartialEq, Debug)]
+pub enum DelimiterKind {
+  Whitespace,
+}
+
 /// `TokenKind` defines the different types of [`Token`] available.
 ///
 /// [`Token`]: struct.Token.html
 #[derive(Clone, PartialEq, Debug)]
 pub enum TokenKind {
   Character(char),
+  Delimiter(DelimiterKind),
   Number(f32),
   Word(String),
 }
@@ -119,6 +125,13 @@ impl Token {
       _ => false,
     }
   }
+
+  pub fn whitespace(start: usize) -> Token {
+    Token {
+      kind: TokenKind::Delimiter(DelimiterKind::Whitespace),
+      start,
+    }
+  }
 }
 
 /// `StreamTokenizer<R>` defines the structure for the tokenization of a given input that implements
@@ -192,10 +205,10 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   /// or the buffer has reached end of file.
   ///
   /// [`BufRead`]: https://doc.rust-lang.org/std/io/trait.BufRead.html
-  fn read_next_line(&mut self) -> Option<String> {
+  fn read_line(&mut self) -> Option<String> {
     let mut buf = String::new();
-    let eof = self.input.read_line(&mut buf).ok().map(|bytes| bytes > 0)?;
-    if eof {
+    let bytes = self.input.read_line(&mut buf).ok()?;
+    if bytes > 0 {
       Some(buf)
     } else {
       None
@@ -209,11 +222,11 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
 
   fn next(&mut self) -> Option<Self::Item> {
     if self.current_line.is_none() {
-      self.current_line = self.read_next_line();
+      self.current_line = self.read_line();
     }
 
     while let Some(line) = &self.current_line {
-      for character in line[self.line_offset..].chars() {
+      if let Some(character) = line[self.line_offset..].chars().next() {
         let (token, length) = extract_token(
           &line[self.line_offset..],
           character,
@@ -224,13 +237,11 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
         self.offset += length;
         self.line_offset += length;
 
-        if token.is_some() {
-          return token;
-        }
+        return Some(token);
+      } else {
+        self.current_line = self.read_line();
+        self.line_offset = 0;
       }
-
-      self.current_line = self.read_next_line();
-      self.line_offset = 0;
     }
 
     None
@@ -244,8 +255,8 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
 /// ```
 /// use strizer::StringTokenizer;
 ///
-/// let word_count = StringTokenizer::new("hello world", &[]).count();
-/// assert_eq!(word_count, 2);
+/// let token_count = StringTokenizer::new("hello world", &[]).count();
+/// assert_eq!(token_count, 3);
 /// ```
 #[derive(Copy, Clone, Debug)]
 pub struct StringTokenizer<'a> {
@@ -285,21 +296,17 @@ impl<'a> Iterator for StringTokenizer<'a> {
   type Item = Token;
 
   fn next(&mut self) -> Option<Self::Item> {
-    for character in self.input[self.offset..].chars() {
-      let (token, length) = extract_token(
-        &self.input[self.offset..],
-        character,
-        &self.identifiers,
-        self.offset,
-      );
+    let character = self.input[self.offset..].chars().next()?;
+    let (token, length) = extract_token(
+      &self.input[self.offset..],
+      character,
+      &self.identifiers,
+      self.offset,
+    );
 
-      self.offset += length;
+    self.offset += length;
 
-      if token.is_some() {
-        return token;
-      }
-    }
-    None
+    Some(token)
   }
 }
 
@@ -308,21 +315,22 @@ fn extract_token(
   character: char,
   identifiers: &[char],
   offset: usize,
-) -> (Option<Token>, usize) {
+) -> (Token, usize) {
   if identifiers.contains(&character) {
-    let (token, length) = extract_character_token(character, offset);
-    (Some(token), length)
+    extract_character_token(character, offset)
   } else if character.is_whitespace() {
-    (None, character.len_utf8())
+    extract_whitespace_token(character, offset)
   } else {
-    let (token, length) = extract_token_chunk(&input, &identifiers, offset);
-    (Some(token), length)
+    extract_token_chunk(&input, &identifiers, offset)
   }
 }
 
 fn extract_character_token(character: char, offset: usize) -> (Token, usize) {
-  let token = Token::character(character, offset);
-  (token, character.len_utf8())
+  (Token::character(character, offset), character.len_utf8())
+}
+
+fn extract_whitespace_token(character: char, offset: usize) -> (Token, usize) {
+  (Token::whitespace(offset), character.len_utf8())
 }
 
 fn extract_token_chunk<'a>(
@@ -337,6 +345,7 @@ fn extract_token_chunk<'a>(
   } else {
     Token::word(chunk, offset)
   };
+
   (token, chunk.len())
 }
 
@@ -435,19 +444,23 @@ mod string_tokenizer_tests {
   #[test]
   fn handles_whitespace() {
     let result = StringTokenizer::new(" ", &[]).collect::<Vec<Token>>();
-    assert_eq!(result.len(), 0);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
   }
 
   #[test]
   fn handle_custom_whitespace() {
     let result = StringTokenizer::new("\u{2000}", &[]).collect::<Vec<Token>>();
-    assert_eq!(result.len(), 0);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
   }
 
   #[test]
   fn handles_multiple_whitespace() {
     let result = StringTokenizer::new("  ", &[]).collect::<Vec<Token>>();
-    assert_eq!(result.len(), 0);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(1)));
   }
 
   #[test]
@@ -464,8 +477,10 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new(" a ", &['a']);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 1);
-    assert_eq!(result.get(0), Some(&Token::character('a', 1)));
+    assert_eq!(result.len(), 3);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
+    assert_eq!(result.get(1), Some(&Token::character('a', 1)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(2)));
   }
 
   #[test]
@@ -473,9 +488,12 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new(" hello world ", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 7)));
+    assert_eq!(result.len(), 5);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
+    assert_eq!(result.get(1), Some(&Token::word("hello", 1)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(6)));
+    assert_eq!(result.get(3), Some(&Token::word("world", 7)));
+    assert_eq!(result.get(4), Some(&Token::whitespace(12)));
   }
 
   #[test]
@@ -483,9 +501,10 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("hello world", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 2);
+    assert_eq!(result.len(), 3);
     assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 6)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(2), Some(&Token::word("world", 6)));
   }
 
   #[test]
@@ -493,9 +512,12 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("hello \n world", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 2);
+    assert_eq!(result.len(), 5);
     assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 8)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(6)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(7)));
+    assert_eq!(result.get(4), Some(&Token::word("world", 8)));
   }
 
   #[test]
@@ -539,10 +561,12 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8} \u{1F1EE}\n\u{1F1F4}", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 3);
+    assert_eq!(result.len(), 5);
     assert_eq!(result.get(0), Some(&Token::word("\u{1F1F7}\u{1F1F8}", 0)));
-    assert_eq!(result.get(1), Some(&Token::word("\u{1F1EE}", 9)));
-    assert_eq!(result.get(2), Some(&Token::word("\u{1F1F4}", 14)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(8)));
+    assert_eq!(result.get(2), Some(&Token::word("\u{1F1EE}", 9)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(13)));
+    assert_eq!(result.get(4), Some(&Token::word("\u{1F1F4}", 14)));
   }
 
   #[test]
@@ -550,9 +574,10 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("hello ⼦", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 2);
+    assert_eq!(result.len(), 3);
     assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
-    assert_eq!(result.get(1), Some(&Token::word("⼦", 6)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(2), Some(&Token::word("⼦", 6)));
   }
 
   #[test]
@@ -560,9 +585,10 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("hello ⼦", &['⼦']);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 2);
+    assert_eq!(result.len(), 3);
     assert_eq!(result.get(0), Some(&Token::word("hello", 0)));
-    assert_eq!(result.get(1), Some(&Token::character('⼦', 6)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(2), Some(&Token::character('⼦', 6)));
   }
 
   #[test]
@@ -570,10 +596,12 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("1 2 3", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 3);
+    assert_eq!(result.len(), 5);
     assert_eq!(result.get(0), Some(&Token::number(1f32, 0)));
-    assert_eq!(result.get(1), Some(&Token::number(2f32, 2)));
-    assert_eq!(result.get(2), Some(&Token::number(3f32, 4)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(1)));
+    assert_eq!(result.get(2), Some(&Token::number(2f32, 2)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(3)));
+    assert_eq!(result.get(4), Some(&Token::number(3f32, 4)));
   }
 
   #[test]
@@ -581,10 +609,12 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("1.1 2.2 3.3", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 3);
+    assert_eq!(result.len(), 5);
     assert_eq!(result.get(0), Some(&Token::number(1.1f32, 0)));
-    assert_eq!(result.get(1), Some(&Token::number(2.2f32, 4)));
-    assert_eq!(result.get(2), Some(&Token::number(3.3f32, 8)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(3)));
+    assert_eq!(result.get(2), Some(&Token::number(2.2f32, 4)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(7)));
+    assert_eq!(result.get(4), Some(&Token::number(3.3f32, 8)));
   }
 
   #[test]
@@ -592,10 +622,12 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("-1 -2 -3", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 3);
+    assert_eq!(result.len(), 5);
     assert_eq!(result.get(0), Some(&Token::number(-1f32, 0)));
-    assert_eq!(result.get(1), Some(&Token::number(-2f32, 3)));
-    assert_eq!(result.get(2), Some(&Token::number(-3f32, 6)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(2)));
+    assert_eq!(result.get(2), Some(&Token::number(-2f32, 3)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(4), Some(&Token::number(-3f32, 6)));
   }
 
   #[test]
@@ -603,10 +635,12 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("-1.1 -2.2 -3.3", &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 3);
+    assert_eq!(result.len(), 5);
     assert_eq!(result.get(0), Some(&Token::number(-1.1f32, 0)));
-    assert_eq!(result.get(1), Some(&Token::number(-2.2f32, 5)));
-    assert_eq!(result.get(2), Some(&Token::number(-3.3f32, 10)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(4)));
+    assert_eq!(result.get(2), Some(&Token::number(-2.2f32, 5)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(9)));
+    assert_eq!(result.get(4), Some(&Token::number(-3.3f32, 10)));
   }
 
   #[test]
@@ -614,13 +648,15 @@ mod string_tokenizer_tests {
     let tokenizer = StringTokenizer::new("-1 -2 -3", &['-']);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 6);
+    assert_eq!(result.len(), 8);
     assert_eq!(result.get(0), Some(&Token::character('-', 0)));
     assert_eq!(result.get(1), Some(&Token::number(1f32, 1)));
-    assert_eq!(result.get(2), Some(&Token::character('-', 3)));
-    assert_eq!(result.get(3), Some(&Token::number(2f32, 4)));
-    assert_eq!(result.get(4), Some(&Token::character('-', 6)));
-    assert_eq!(result.get(5), Some(&Token::number(3f32, 7)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(2)));
+    assert_eq!(result.get(3), Some(&Token::character('-', 3)));
+    assert_eq!(result.get(4), Some(&Token::number(2f32, 4)));
+    assert_eq!(result.get(5), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(6), Some(&Token::character('-', 6)));
+    assert_eq!(result.get(7), Some(&Token::number(3f32, 7)));
   }
 }
 
@@ -634,63 +670,83 @@ mod stream_tokenizer_tests {
   fn handles_multiple_lines_with_whitespace() {
     let result =
       StreamTokenizer::new(&mut Cursor::new(" \n\u{2000}\n \n "), &[]).collect::<Vec<Token>>();
-    assert_eq!(result.len(), 0);
+    assert_eq!(result.len(), 7);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(1)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(2)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(4), Some(&Token::whitespace(6)));
+    assert_eq!(result.get(5), Some(&Token::whitespace(7)));
+    assert_eq!(result.get(6), Some(&Token::whitespace(8)));
   }
 
   #[test]
   fn handles_multiple_whitespace_with_chars() {
-    let cursor = &mut Cursor::new(" a ");
-
-    let tokenizer = StreamTokenizer::new(cursor, &['a']);
-
-    let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 1);
-    assert_eq!(result.get(0), Some(&Token::character('a', 1)));
+    let result = StreamTokenizer::new(&mut Cursor::new(" a "), &['a']).collect::<Vec<Token>>();
+    assert_eq!(result.len(), 3);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
+    assert_eq!(result.get(1), Some(&Token::character('a', 1)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(2)));
   }
 
   #[test]
   fn handles_multiple_whitespace_with_word() {
     let result =
       StreamTokenizer::new(&mut Cursor::new(" hello world "), &[]).collect::<Vec<Token>>();
-    assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 7)));
+    assert_eq!(result.len(), 5);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
+    assert_eq!(result.get(1), Some(&Token::word("hello", 1)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(6)));
+    assert_eq!(result.get(3), Some(&Token::word("world", 7)));
+    assert_eq!(result.get(4), Some(&Token::whitespace(12)));
   }
 
   #[test]
   fn handles_multiple_lines_with_words() {
     let result =
       StreamTokenizer::new(&mut Cursor::new(" hello \n world "), &[]).collect::<Vec<Token>>();
-    assert_eq!(result.len(), 2);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 9)));
+    assert_eq!(result.len(), 7);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
+    assert_eq!(result.get(1), Some(&Token::word("hello", 1)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(6)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(7)));
+    assert_eq!(result.get(4), Some(&Token::whitespace(8)));
+    assert_eq!(result.get(5), Some(&Token::word("world", 9)));
+    assert_eq!(result.get(6), Some(&Token::whitespace(14)));
   }
 
   #[test]
   fn handles_multiple_lines_with_words_and_identifiers() {
-    let cursor = &mut Cursor::new(" hello \n world \n\n!");
-
-    let tokenizer = StreamTokenizer::new(cursor, &['!']);
-
-    let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 3);
-    assert_eq!(result.get(0), Some(&Token::word("hello", 1)));
-    assert_eq!(result.get(1), Some(&Token::word("world", 9)));
-    assert_eq!(result.get(2), Some(&Token::character('!', 17)));
+    let result = StreamTokenizer::new(&mut Cursor::new(" hello \n world \n\n!"), &['!'])
+      .collect::<Vec<Token>>();
+    assert_eq!(result.len(), 10);
+    assert_eq!(result.get(0), Some(&Token::whitespace(0)));
+    assert_eq!(result.get(1), Some(&Token::word("hello", 1)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(6)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(7)));
+    assert_eq!(result.get(4), Some(&Token::whitespace(8)));
+    assert_eq!(result.get(5), Some(&Token::word("world", 9)));
+    assert_eq!(result.get(6), Some(&Token::whitespace(14)));
+    assert_eq!(result.get(7), Some(&Token::whitespace(15)));
+    assert_eq!(result.get(8), Some(&Token::whitespace(16)));
+    assert_eq!(result.get(9), Some(&Token::character('!', 17)));
   }
 
   #[test]
   fn handles_multiple_lines_with_flag_chars() {
-    let cursor = &mut Cursor::new("\u{1F1EE}\n\n\u{1F1EE}\u{1F1F8}\n\u{1F1F7}\u{1F1F8}");
-
-    let tokenizer = StreamTokenizer::new(cursor, &['\u{1F1EE}']);
-
-    let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 4);
+    let result = StreamTokenizer::new(
+      &mut Cursor::new("\u{1F1EE}\n\n\u{1F1EE}\u{1F1F8}\n\u{1F1F7}\u{1F1F8}"),
+      &['\u{1F1EE}'],
+    )
+    .collect::<Vec<Token>>();
+    assert_eq!(result.len(), 7);
     assert_eq!(result.get(0), Some(&Token::character('\u{1F1EE}', 0)));
-    assert_eq!(result.get(1), Some(&Token::character('\u{1F1EE}', 6)));
-    assert_eq!(result.get(2), Some(&Token::word("\u{1F1F8}", 10)));
-    assert_eq!(result.get(3), Some(&Token::word("\u{1F1F7}\u{1F1F8}", 15)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(4)));
+    assert_eq!(result.get(2), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(3), Some(&Token::character('\u{1F1EE}', 6)));
+    assert_eq!(result.get(4), Some(&Token::word("\u{1F1F8}", 10)));
+    assert_eq!(result.get(5), Some(&Token::whitespace(14)));
+    assert_eq!(result.get(6), Some(&Token::word("\u{1F1F7}\u{1F1F8}", 15)));
   }
 
   #[test]
@@ -699,11 +755,15 @@ mod stream_tokenizer_tests {
     let tokenizer = StreamTokenizer::new(cursor, &[]);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 4);
+    assert_eq!(result.len(), 8);
     assert_eq!(result.get(0), Some(&Token::number(1.1f32, 0)));
-    assert_eq!(result.get(1), Some(&Token::number(2f32, 4)));
-    assert_eq!(result.get(2), Some(&Token::number(-3f32, 7)));
-    assert_eq!(result.get(3), Some(&Token::number(-4.4f32, 10)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(3)));
+    assert_eq!(result.get(2), Some(&Token::number(2f32, 4)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(4), Some(&Token::whitespace(6)));
+    assert_eq!(result.get(5), Some(&Token::number(-3f32, 7)));
+    assert_eq!(result.get(6), Some(&Token::whitespace(9)));
+    assert_eq!(result.get(7), Some(&Token::number(-4.4f32, 10)));
   }
 
   #[test]
@@ -712,12 +772,16 @@ mod stream_tokenizer_tests {
     let tokenizer = StreamTokenizer::new(cursor, &['-']);
 
     let result = tokenizer.collect::<Vec<Token>>();
-    assert_eq!(result.len(), 6);
+    assert_eq!(result.len(), 10);
     assert_eq!(result.get(0), Some(&Token::number(1.1f32, 0)));
-    assert_eq!(result.get(1), Some(&Token::number(2f32, 4)));
-    assert_eq!(result.get(2), Some(&Token::character('-', 7)));
-    assert_eq!(result.get(3), Some(&Token::number(3f32, 8)));
-    assert_eq!(result.get(4), Some(&Token::character('-', 10)));
-    assert_eq!(result.get(5), Some(&Token::number(4.4f32, 11)));
+    assert_eq!(result.get(1), Some(&Token::whitespace(3)));
+    assert_eq!(result.get(2), Some(&Token::number(2f32, 4)));
+    assert_eq!(result.get(3), Some(&Token::whitespace(5)));
+    assert_eq!(result.get(4), Some(&Token::whitespace(6)));
+    assert_eq!(result.get(5), Some(&Token::character('-', 7)));
+    assert_eq!(result.get(6), Some(&Token::number(3f32, 8)));
+    assert_eq!(result.get(7), Some(&Token::whitespace(9)));
+    assert_eq!(result.get(8), Some(&Token::character('-', 10)));
+    assert_eq!(result.get(9), Some(&Token::number(4.4f32, 11)));
   }
 }
