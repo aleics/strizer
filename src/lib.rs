@@ -6,8 +6,8 @@ use std::io::BufRead;
 #[derive(PartialEq, Debug)]
 pub enum TokenKind {
   Character(char),
-  Word(String),
   Number(f32),
+  Word(String),
 }
 
 /// `Token` describes the primitive that is returned while iterating through a Tokenizer.
@@ -127,10 +127,7 @@ impl Token {
 ///   let mut reader = BufReader::new(file);
 ///
 ///   let error_count = StreamTokenizer::new(&mut reader)
-///     .filter(|token| match &token.kind {
-///       TokenKind::Word(word) => word == "ERROR",
-///       _ => false
-///     })
+///     .filter(|token| token.is_word_equal("ERROR"))
 ///     .count();
 ///   println!("number of error logs: {}", error_count);
 ///   Ok(())
@@ -315,17 +312,15 @@ fn extract_token(
   delimiters: &[char],
   offset: usize,
 ) -> (Option<Token>, usize) {
-  if character.is_whitespace() {
-    return (None, character.len_utf8());
-  }
-
-  let (token, length) = if delimiters.contains(&character) {
-    extract_character_token(character, offset)
+  if delimiters.contains(&character) {
+    let (token, length) = extract_character_token(character, offset);
+    (Some(token), length)
+  } else if character.is_whitespace() {
+    (None, character.len_utf8())
   } else {
-    extract_token_chunk(&input, &delimiters, offset)
-  };
-
-  (Some(token), length)
+    let (token, length) = extract_token_chunk(&input, &delimiters, offset);
+    (Some(token), length)
+  }
 }
 
 fn extract_character_token(character: char, offset: usize) -> (Token, usize) {
@@ -345,7 +340,6 @@ fn extract_token_chunk<'a>(
   } else {
     Token::word(chunk, offset)
   };
-
   (token, chunk.len())
 }
 
@@ -457,6 +451,16 @@ mod string_tokenizer_tests {
   fn handles_multiple_whitespace() {
     let result = StringTokenizer::new("  ").collect::<Vec<Token>>();
     assert_eq!(result.len(), 0);
+  }
+
+  #[test]
+  fn handles_whitespace_as_char() {
+    let mut tokenizer = StringTokenizer::new(" ");
+    tokenizer.ordinary_char(' ');
+
+    let result = tokenizer.collect::<Vec<Token>>();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result.get(0), Some(&Token::character(' ', 0)));
   }
 
   #[test]
@@ -632,8 +636,9 @@ mod string_tokenizer_tests {
 
 #[cfg(test)]
 mod stream_tokenizer_tests {
-  use crate::{StreamTokenizer, Token};
   use std::io::Cursor;
+
+  use crate::{StreamTokenizer, Token};
 
   #[test]
   fn handles_multiple_lines_with_whitespace() {
