@@ -9,13 +9,14 @@ use strizer::{StreamTokenizer, StringTokenizer, Token};
 
 #[bench]
 fn bench_string_tokenize_words(b: &mut Bencher) {
-  b.iter(|| StringTokenizer::new("hello world", &[]).collect::<Vec<Token>>());
+  let tokenizer = StringTokenizer::new("hello world", &[]);
+  b.iter(|| tokenizer.collect::<Vec<Token>>());
 }
 
 #[bench]
 fn bench_string_tokenize_identifiers(b: &mut Bencher) {
   let tokenizer = StringTokenizer::new("hello world", &['o']);
-  b.iter(|| tokenizer.clone().collect::<Vec<Token>>());
+  b.iter(|| tokenizer.collect::<Vec<Token>>());
 }
 
 #[bench]

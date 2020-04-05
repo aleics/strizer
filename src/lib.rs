@@ -3,7 +3,7 @@ use std::io::BufRead;
 /// `TokenKind` defines the different types of [`Token`] available.
 ///
 /// [`Token`]: struct.Token.html
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum TokenKind {
   Character(char),
   Number(f32),
@@ -22,7 +22,7 @@ pub enum TokenKind {
 /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
 /// [`TokenKind::Number`]: enum.TokenKind.html#variant.Number
 /// [`TokenKind::Word`]: enum.TokenKind.html#variant.Word
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Token {
   kind: TokenKind,
   start: usize,
@@ -145,6 +145,7 @@ impl Token {
 /// ```
 ///
 /// [`BufRead`]: https://doc.rust-lang.org/std/io/trait.BufRead.html
+#[derive(Debug)]
 pub struct StreamTokenizer<'a, R> {
   input: &'a mut R,
   current_line: Option<String>,
@@ -246,7 +247,7 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
 /// let word_count = StringTokenizer::new("hello world", &[]).count();
 /// assert_eq!(word_count, 2);
 /// ```
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct StringTokenizer<'a> {
   input: &'a str,
   offset: usize,
