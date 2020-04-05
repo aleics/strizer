@@ -150,14 +150,14 @@ pub struct StreamTokenizer<'a, R> {
   current_line: Option<String>,
   line_offset: usize,
   offset: usize,
-  ordinary_chars: &'a [char],
+  identifiers: &'a [char],
 }
 
 impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   /// Creates a new `StreamTokenizer<R>` with a given [`BufRead`] input. The different offsets
-  /// and data used while iterating is also initialized.
+  /// and data used while iterating are initialized. An array of `identifiers` is passed by, and
+  /// the associated characters will be identified as `Character` [`Token`] during the tokenization.
   ///
-  /// [`BufRead`]: https://doc.rust-lang.org/std/io/trait.BufRead.html
   ///
   /// # Examples
   ///
@@ -175,14 +175,15 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   /// assert_eq!(a_count, 5);
   /// ```
   ///
+  /// [`BufRead`]: https://doc.rust-lang.org/std/io/trait.BufRead.html
   /// [`Token`]: struct.Token.html
-  pub fn new(input: &'a mut R, ordinary_chars: &'a [char]) -> Self {
+  pub fn new(input: &'a mut R, identifiers: &'a [char]) -> Self {
     StreamTokenizer {
       input,
       current_line: None,
       line_offset: 0,
       offset: 0,
-      ordinary_chars,
+      identifiers,
     }
   }
 
@@ -215,7 +216,7 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
         let (token, length) = extract_token(
           &line[self.line_offset..],
           character,
-          &self.ordinary_chars,
+          &self.identifiers,
           self.offset,
         );
 
@@ -249,7 +250,7 @@ impl<'a, R: BufRead> Iterator for StreamTokenizer<'a, R> {
 pub struct StringTokenizer<'a> {
   input: &'a str,
   offset: usize,
-  ordinary_chars: &'a [char],
+  identifiers: &'a [char],
 }
 
 impl<'a> StringTokenizer<'a> {
@@ -269,11 +270,11 @@ impl<'a> StringTokenizer<'a> {
   ///
   /// assert_eq!(a_count, 5);
   /// ```
-  pub fn new(input: &'a str, ordinary_chars: &'a [char]) -> Self {
+  pub fn new(input: &'a str, identifiers: &'a [char]) -> Self {
     StringTokenizer {
       input,
       offset: 0,
-      ordinary_chars,
+      identifiers,
     }
   }
 }
@@ -287,7 +288,7 @@ impl<'a> Iterator for StringTokenizer<'a> {
       let (token, length) = extract_token(
         &self.input[self.offset..],
         character,
-        &self.ordinary_chars,
+        &self.identifiers,
         self.offset,
       );
 
@@ -509,7 +510,7 @@ mod string_tokenizer_tests {
   }
 
   #[test]
-  fn handle_flags_with_ordinary_flag() {
+  fn handle_flags_with_flag_identifier() {
     let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}\u{1F1EE}\u{1F1F4}", &['\u{1F1F8}']);
 
     let result = tokenizer.collect::<Vec<Token>>();
@@ -520,7 +521,7 @@ mod string_tokenizer_tests {
   }
 
   #[test]
-  fn handle_flags_with_multiple_ordinary_char() {
+  fn handle_flags_with_multiple_identifiers() {
     let tokenizer = StringTokenizer::new("\u{1F1F7}\u{1F1F8}a\u{1F1EE}b\u{1F1F4}", &['a', 'b']);
 
     let result = tokenizer.collect::<Vec<Token>>();
@@ -554,7 +555,7 @@ mod string_tokenizer_tests {
   }
 
   #[test]
-  fn handle_chinese_ordinary_char() {
+  fn handle_chinese_identifier() {
     let tokenizer = StringTokenizer::new("hello ⼦", &['⼦']);
 
     let result = tokenizer.collect::<Vec<Token>>();
@@ -608,7 +609,7 @@ mod string_tokenizer_tests {
   }
 
   #[test]
-  fn handle_numbers_with_ordinary_chars() {
+  fn handle_numbers_with_identifiers() {
     let tokenizer = StringTokenizer::new("-1 -2 -3", &['-']);
 
     let result = tokenizer.collect::<Vec<Token>>();
@@ -665,7 +666,7 @@ mod stream_tokenizer_tests {
   }
 
   #[test]
-  fn handles_multiple_lines_with_words_and_ordinary_chars() {
+  fn handles_multiple_lines_with_words_and_identifiers() {
     let cursor = &mut Cursor::new(" hello \n world \n\n!");
 
     let tokenizer = StreamTokenizer::new(cursor, &['!']);
@@ -705,7 +706,7 @@ mod stream_tokenizer_tests {
   }
 
   #[test]
-  fn handle_multiple_lines_numbers_with_ordinary_chars() {
+  fn handle_multiple_lines_numbers_with_identifiers() {
     let cursor = &mut Cursor::new("1.1\n2\n\n-3\n-4.4");
     let tokenizer = StreamTokenizer::new(cursor, &['-']);
 

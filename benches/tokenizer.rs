@@ -13,7 +13,7 @@ fn bench_string_tokenize_words(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_string_tokenize_ordinary_chars(b: &mut Bencher) {
+fn bench_string_tokenize_identifiers(b: &mut Bencher) {
   let tokenizer = StringTokenizer::new("hello world", &['o']);
   b.iter(|| tokenizer.clone().collect::<Vec<Token>>());
 }
@@ -25,7 +25,7 @@ fn bench_stream_tokenize_words(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_stream_tokenize_ordinary_chars(b: &mut Bencher) {
+fn bench_stream_tokenize_identifiers(b: &mut Bencher) {
   let cursor = &mut Cursor::new("hello\nworld!\n");
   b.iter(|| {
     let tokenizer = StreamTokenizer::new(cursor, &['o']);
