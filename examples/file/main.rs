@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io;
-use strizer::StreamTokenizer;
+use strizer::{StreamTokenizer, TokenKind};
 
 fn main() -> io::Result<()> {
   let f = File::open("examples/file/data.txt")?;
@@ -11,11 +11,17 @@ fn main() -> io::Result<()> {
   let mut a_count = 0;
   let mut sit_count = 0;
 
-  tokenizer.for_each(|token| {
-    if token.is_character_equal('a') {
-      a_count += 1;
-    } else if token.is_word_equal("sit") {
-      sit_count += 1;
+  tokenizer.for_each(|(token, _, slice)| match token.kind() {
+    TokenKind::Character => {
+      if slice == "a" {
+        a_count += 1;
+      }
+    }
+    TokenKind::Delimiter(_) => {}
+    TokenKind::Word => {
+      if slice == "sit" {
+        sit_count += 1;
+      }
     }
   });
 

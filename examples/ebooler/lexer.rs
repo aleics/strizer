@@ -11,18 +11,18 @@ pub enum Symbol {
   False,
 }
 
-fn get_character_symbol(character: &char) -> Option<Symbol> {
+fn get_character_symbol(character: &str) -> Option<Symbol> {
   match character {
-    '|' => Some(Symbol::Or),
-    '&' => Some(Symbol::And),
-    '!' => Some(Symbol::Not),
-    '(' => Some(Symbol::Left),
-    ')' => Some(Symbol::Right),
+    "|" => Some(Symbol::Or),
+    "&" => Some(Symbol::And),
+    "!" => Some(Symbol::Not),
+    "(" => Some(Symbol::Left),
+    ")" => Some(Symbol::Right),
     _ => None,
   }
 }
 
-fn get_word_symbol(word: &String) -> Option<Symbol> {
+fn get_word_symbol(word: &str) -> Option<Symbol> {
   match word.to_uppercase().as_str() {
     "TRUE" => Some(Symbol::True),
     "FALSE" => Some(Symbol::False),
@@ -46,10 +46,10 @@ impl<'a> Iterator for Lexer<'a> {
   type Item = Symbol;
 
   fn next(&mut self) -> Option<Self::Item> {
-    while let Some(token) = self.tokenizer.next() {
+    while let Some((token, _, slice)) = self.tokenizer.next() {
       match token.kind() {
-        TokenKind::Character(character) => return get_character_symbol(character),
-        TokenKind::Word(word) => return get_word_symbol(word),
+        TokenKind::Character => return get_character_symbol(slice),
+        TokenKind::Word => return get_word_symbol(slice),
         _ => continue,
       }
     }
