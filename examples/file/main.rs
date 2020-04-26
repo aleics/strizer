@@ -17,7 +17,6 @@ fn main() -> io::Result<()> {
         a_count += 1;
       }
     }
-    TokenKind::Delimiter(_) => {}
     TokenKind::Word => {
       if slice == "sit" {
         sit_count += 1;

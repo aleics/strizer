@@ -46,13 +46,10 @@ impl<'a> Iterator for Lexer<'a> {
   type Item = Symbol;
 
   fn next(&mut self) -> Option<Self::Item> {
-    while let Some((token, _, slice)) = self.tokenizer.next() {
-      match token.kind() {
-        TokenKind::Character => return get_character_symbol(slice),
-        TokenKind::Word => return get_word_symbol(slice),
-        _ => continue,
-      }
+    let (token, _, slice) = self.tokenizer.next()?;
+    match token.kind() {
+      TokenKind::Character => get_character_symbol(slice),
+      TokenKind::Word => get_word_symbol(slice),
     }
-    None
   }
 }
