@@ -12,8 +12,8 @@ fn main() -> io::Result<()> {
   let mut sit_count = 0;
 
   tokenizer.for_each(|(token, _, slice)| match token.kind() {
-    TokenKind::Character => {
-      if slice == "a" {
+    TokenKind::Character(character) => {
+      if character == &'a' {
         a_count += 1;
       }
     }

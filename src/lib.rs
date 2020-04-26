@@ -8,7 +8,7 @@ pub type Span = Range<usize>;
 /// [`Token`]: struct.Token.html
 #[derive(Clone, PartialEq, Debug)]
 pub enum TokenKind {
-  Character,
+  Character(char),
   Word,
 }
 
@@ -34,9 +34,9 @@ impl Token {
   }
 
   /// Creates a character token with a given start position (in bytes).
-  pub fn character() -> Token {
+  pub fn character(character: char) -> Token {
     Token {
-      kind: TokenKind::Character,
+      kind: TokenKind::Character(character),
     }
   }
 
@@ -45,7 +45,17 @@ impl Token {
   /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
   pub fn is_character(&self) -> bool {
     match self.kind {
-      TokenKind::Character => true,
+      TokenKind::Character(_) => true,
+      _ => false,
+    }
+  }
+
+  /// Returns `true` if the `Token` is [`TokenKind::Character`] and equal to the `input` character.
+  ///
+  /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
+  pub fn is_character_equal(&self, input: char) -> bool {
+    match self.kind {
+      TokenKind::Character(character) => character == input,
       _ => false,
     }
   }
@@ -136,7 +146,7 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   }
 
   /// Create an slice of the input by a defined length
-  fn slice(&self, line: &String, length: usize) -> String {
+  fn slice(&self, line: &str, length: usize) -> String {
     let start = self.line_offset;
     let end = self.line_offset + length;
 
@@ -282,7 +292,7 @@ impl<'a> Iterator for StringTokenizer<'a> {
 
 fn extract_token(input: &str, character: char, identifiers: &[char]) -> (Option<Token>, usize) {
   if identifiers.contains(&character) {
-    (Some(Token::character()), character.len_utf8())
+    (Some(Token::character(character)), character.len_utf8())
   } else if character.is_whitespace() {
     (None, character.len_utf8())
   } else {
@@ -306,7 +316,7 @@ mod token_tests {
   #[test]
   fn is_character() {
     let char_token = Token {
-      kind: TokenKind::Character,
+      kind: TokenKind::Character('a'),
     };
     assert_eq!(char_token.is_character(), true);
 
@@ -317,6 +327,15 @@ mod token_tests {
   }
 
   #[test]
+  fn is_character_equal() {
+    let char_token = Token {
+      kind: TokenKind::Character('a'),
+    };
+    assert_eq!(char_token.is_character_equal('a'), true);
+    assert_eq!(char_token.is_character_equal('b'), false);
+  }
+
+  #[test]
   fn is_word() {
     let word_token = Token {
       kind: TokenKind::Word,
@@ -324,7 +343,7 @@ mod token_tests {
     assert_eq!(word_token.is_word(), true);
 
     let char_token = Token {
-      kind: TokenKind::Character,
+      kind: TokenKind::Character('a'),
     };
     assert_eq!(char_token.is_word(), false);
   }
@@ -358,7 +377,7 @@ mod string_tokenizer_tests {
 
     let result = tokenizer.collect::<Vec<(Token, Span, &str)>>();
     assert_eq!(result.len(), 1);
-    assert_eq!(result.get(0), Some(&(Token::character(), 0..1, " ")));
+    assert_eq!(result.get(0), Some(&(Token::character(' '), 0..1, " ")));
   }
 
   #[test]
@@ -367,7 +386,7 @@ mod string_tokenizer_tests {
 
     let result = tokenizer.collect::<Vec<(Token, Span, &str)>>();
     assert_eq!(result.len(), 1);
-    assert_eq!(result.get(0), Some(&(Token::character(), 1..2, "a")));
+    assert_eq!(result.get(0), Some(&(Token::character('a'), 1..2, "a")));
   }
 
   #[test]
@@ -421,7 +440,7 @@ mod string_tokenizer_tests {
     assert_eq!(result.get(0), Some(&(Token::word(), 0..4, "\u{1F1F7}")));
     assert_eq!(
       result.get(1),
-      Some(&(Token::character(), 4..8, "\u{1F1F8}"))
+      Some(&(Token::character('\u{1F1F8}'), 4..8, "\u{1F1F8}"))
     );
     assert_eq!(
       result.get(2),
@@ -439,9 +458,9 @@ mod string_tokenizer_tests {
       result.get(0),
       Some(&(Token::word(), 0..8, "\u{1F1F7}\u{1F1F8}"))
     );
-    assert_eq!(result.get(1), Some(&(Token::character(), 8..9, "a")));
+    assert_eq!(result.get(1), Some(&(Token::character('a'), 8..9, "a")));
     assert_eq!(result.get(2), Some(&(Token::word(), 9..13, "\u{1F1EE}")));
-    assert_eq!(result.get(3), Some(&(Token::character(), 13..14, "b")));
+    assert_eq!(result.get(3), Some(&(Token::character('b'), 13..14, "b")));
     assert_eq!(result.get(4), Some(&(Token::word(), 14..18, "\u{1F1F4}")));
   }
 
@@ -476,7 +495,7 @@ mod string_tokenizer_tests {
     let result = tokenizer.collect::<Vec<(Token, Span, &str)>>();
     assert_eq!(result.len(), 2);
     assert_eq!(result.get(0), Some(&(Token::word(), 0..5, "hello")));
-    assert_eq!(result.get(1), Some(&(Token::character(), 6..9, "⼦")));
+    assert_eq!(result.get(1), Some(&(Token::character('⼦'), 6..9, "⼦")));
   }
 }
 
@@ -501,7 +520,7 @@ mod stream_tokenizer_tests {
     assert_eq!(result.len(), 1);
     assert_eq!(
       result.get(0),
-      Some(&(Token::character(), 1..2, "a".to_string()))
+      Some(&(Token::character('a'), 1..2, "a".to_string()))
     );
   }
 
@@ -552,7 +571,7 @@ mod stream_tokenizer_tests {
     );
     assert_eq!(
       result.get(2),
-      Some(&(Token::character(), 17..18, "!".to_string()))
+      Some(&(Token::character('!'), 17..18, "!".to_string()))
     );
   }
 
@@ -566,11 +585,15 @@ mod stream_tokenizer_tests {
     assert_eq!(result.len(), 4);
     assert_eq!(
       result.get(0),
-      Some(&(Token::character(), 0..4, "\u{1F1EE}".to_string()))
+      Some(&(Token::character('\u{1F1EE}'), 0..4, "\u{1F1EE}".to_string()))
     );
     assert_eq!(
       result.get(1),
-      Some(&(Token::character(), 6..10, "\u{1F1EE}".to_string()))
+      Some(&(
+        Token::character('\u{1F1EE}'),
+        6..10,
+        "\u{1F1EE}".to_string()
+      ))
     );
     assert_eq!(
       result.get(2),
@@ -596,12 +619,12 @@ mod stream_tokenizer_tests {
     assert_eq!(result.get(1), Some(&(Token::word(), 4..5, "2".to_string())));
     assert_eq!(
       result.get(2),
-      Some(&(Token::character(), 7..8, "-".to_string()))
+      Some(&(Token::character('-'), 7..8, "-".to_string()))
     );
     assert_eq!(result.get(3), Some(&(Token::word(), 8..9, "3".to_string())));
     assert_eq!(
       result.get(4),
-      Some(&(Token::character(), 10..11, "-".to_string()))
+      Some(&(Token::character('-'), 10..11, "-".to_string()))
     );
     assert_eq!(
       result.get(5),
