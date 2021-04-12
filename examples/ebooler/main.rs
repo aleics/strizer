@@ -6,6 +6,7 @@ use std::io::stdin;
 
 fn main() {
   println!("Welcome to ebooler! A boolean expression parser.");
+
   loop {
     println!("input: ");
     let mut input = String::new();

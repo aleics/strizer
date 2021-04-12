@@ -1,6 +1,9 @@
 use std::io::BufRead;
 use std::ops::Range;
 
+/// `Span` defines the absolute range of a [`Token`] inside the input data.
+///
+/// [`Token`]: struct.Token.html
 pub type Span = Range<usize>;
 
 /// `TokenKind` defines the different types of [`Token`] available.
@@ -91,6 +94,7 @@ impl Token {
 ///   let error_count = StreamTokenizer::new(&mut reader, &[])
 ///     .filter(|(_, _, slice)| slice == "ERROR")
 ///     .count();
+///
 ///   println!("number of error logs: {}", error_count);
 ///   Ok(())
 /// }
@@ -495,7 +499,7 @@ mod string_tokenizer_tests {
 }
 
 #[cfg(test)]
-mod stream_tokenizer_tests {
+mod tests {
   use std::io::Cursor;
 
   use crate::{Span, StreamTokenizer, Token};
