@@ -44,23 +44,21 @@ impl Token {
   ///
   /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
   pub fn is_character(&self) -> bool {
-    match self.kind {
-      TokenKind::Character(_) => true,
-      _ => false,
-    }
+    matches!(self.kind, TokenKind::Character(_))
   }
 
   /// Returns `true` if the `Token` is [`TokenKind::Character`] and equal to the `input` character.
   ///
   /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
   pub fn is_character_equal(&self, input: char) -> bool {
-    match self.kind {
-      TokenKind::Character(character) => character == input,
-      _ => false,
+    if let TokenKind::Character(character) = self.kind {
+      character == input
+    } else {
+      false
     }
   }
 
-  /// Creates a word token with a given start position (in bytes).
+  /// Creates a word token
   pub fn word() -> Token {
     Token {
       kind: TokenKind::Word,
@@ -71,10 +69,7 @@ impl Token {
   ///
   /// [`TokenKind::Word`]: enum.TokenKind.html#variant.Word
   pub fn is_word(&self) -> bool {
-    match self.kind {
-      TokenKind::Word => true,
-      _ => false,
-    }
+    matches!(self.kind, TokenKind::Word)
   }
 }
 
@@ -145,7 +140,7 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
     }
   }
 
-  /// Create an slice of the input by a defined length
+  /// Create a slice of the input by a defined length
   fn slice(&self, line: &str, length: usize) -> String {
     let start = self.line_offset;
     let end = self.line_offset + length;
@@ -153,7 +148,7 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
     line[start..end].to_owned()
   }
 
-  // Create an span range of the current position and a token length
+  // Create a span range of the current position and a token length
   fn span(&self, length: usize) -> Span {
     let start = self.offset;
     let end = self.offset + length;
@@ -251,7 +246,7 @@ impl<'a> StringTokenizer<'a> {
     }
   }
 
-  /// Create an slice of the input by a defined length
+  /// Create a slice of the input by a defined length
   fn slice(&self, length: usize) -> &'a str {
     let start = self.offset;
     let end = self.offset + length;
@@ -259,7 +254,7 @@ impl<'a> StringTokenizer<'a> {
     &self.input[start..end]
   }
 
-  // Create an span range of the current position and a token length
+  // Create a span range of the current position and a token length
   fn span(&self, length: usize) -> Span {
     let start = self.offset;
     let end = self.offset + length;
