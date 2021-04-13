@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::BufRead;
 use std::ops::Range;
 
@@ -9,10 +10,25 @@ pub type Span = Range<usize>;
 /// `TokenKind` defines the different types of [`Token`] available.
 ///
 /// [`Token`]: struct.Token.html
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TokenKind {
   Character(char),
   Word,
+}
+
+impl From<char> for TokenKind {
+  fn from(character: char) -> Self {
+    TokenKind::Character(character)
+  }
+}
+
+impl fmt::Display for TokenKind {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      TokenKind::Character(char) => write!(f, "Character({})", char),
+      TokenKind::Word => write!(f, "Word"),
+    }
+  }
 }
 
 /// `Token` describes the primitive that is returned while iterating through a Tokenizer.
@@ -25,7 +41,7 @@ pub enum TokenKind {
 ///
 /// [`TokenKind::Character`]: enum.TokenKind.html#variant.Character
 /// [`TokenKind::Word`]: enum.TokenKind.html#variant.Word
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Token {
   kind: TokenKind,
 }
@@ -39,7 +55,7 @@ impl Token {
   /// Creates a character token with a given start position (in bytes).
   pub fn character(character: char) -> Token {
     Token {
-      kind: TokenKind::Character(character),
+      kind: TokenKind::from(character),
     }
   }
 
@@ -73,6 +89,12 @@ impl Token {
   /// [`TokenKind::Word`]: enum.TokenKind.html#variant.Word
   pub fn is_word(&self) -> bool {
     matches!(self.kind, TokenKind::Word)
+  }
+}
+
+impl fmt::Display for Token {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "kind: {}", self.kind)
   }
 }
 
@@ -167,11 +189,8 @@ impl<'a, R: BufRead> StreamTokenizer<'a, R> {
   fn read_line(&mut self) -> Option<String> {
     let mut buf = String::new();
     let bytes = self.input.read_line(&mut buf).ok()?;
-    if bytes > 0 {
-      Some(buf)
-    } else {
-      None
-    }
+
+    (bytes > 0).then(|| buf)
   }
 }
 
