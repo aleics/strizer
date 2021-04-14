@@ -8,3 +8,5 @@ license = "MIT"
 readme = "README.md"
 description = "minimal and fast library for text tokenization"
 edition = "2018"
+
+exclude = ["examples", "benches", '.github']
